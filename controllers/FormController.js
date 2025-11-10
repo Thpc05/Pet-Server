@@ -4,7 +4,6 @@
 import FormModel from '../models/FormModel.js';
 
 export const postForm = async (req, res) => {
-  console.log("Função executada");
   try {
     const formData = req.body;
     console.log(formData);
@@ -54,5 +53,44 @@ export const postForm = async (req, res) => {
     }
     // Erro
     res.status(500).json({ message: "Erro do servidor ao salvar o formulário" });
+  }
+};
+
+export const getFormById = async (req, res) => {
+  try {
+    const cpf = req.params.cpf
+    console.log(cpf)
+
+    // Cpf
+    if (!cpf) {
+        return res.status(400).json({ message: 'Faltou Cpf' })
+    }
+    
+    // Chave de busca
+    const filter = { cpf: cpf };
+
+    // Tenta pegar no mongo
+    const getedForm = await FormModel.findOneAndUpdate(
+      filter
+    )
+
+    // Deu Bom
+    res.status(201).json({ 
+      message: "get feito com sucesso.",
+      data: getedForm 
+    });
+
+  } catch (error) {
+    console.error("Erro no getFormById:", error);
+    
+    // Não colocou nome, cpf ou otros erros de formatação
+    if (error.name === 'ValidationError') {
+        return res.status(400).json({ 
+          message: "Erro de validação", 
+          errors: error.errors 
+        });
+    }
+    // Erro
+    res.status(500).json({ message: "Erro do servidor ao pegar o formulário" });
   }
 };
