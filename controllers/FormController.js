@@ -70,26 +70,21 @@ export const getFormById = async (req, res) => {
     const filter = { cpf: cpf };
 
     // Tenta pegar no mongo
-    const getedForm = await FormModel.findOneAndUpdate(
+    const getedForm = await FormModel.findOne(
       filter
     )
 
+    if (!getedForm) {
+      return res.status(404).json({ message: "Paciente não encontrado." });
+    }
     // Deu Bom
-    res.status(201).json({ 
-      message: "get feito com sucesso.",
-      data: getedForm 
-    });
+    res.status(200).json(getedForm);
 
   } catch (error) {
     console.error("Erro no getFormById:", error);
     
     // Não colocou nome, cpf ou otros erros de formatação
-    if (error.name === 'ValidationError') {
-        return res.status(400).json({ 
-          message: "Erro de validação", 
-          errors: error.errors 
-        });
-    }
+    console.error("Erro no getFormById:", error);
     // Erro
     res.status(500).json({ message: "Erro do servidor ao pegar o formulário" });
   }
