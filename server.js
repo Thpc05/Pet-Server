@@ -2,7 +2,6 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
-const PORT=3050
 
 import { connectDB } from './config/MongoDB.js';
 
@@ -17,6 +16,8 @@ app.use(cors());
 app.use('/db/forms', FormsRoutes);
 
 connectDB();
+
+const PORT = process.env.PORT || 3050;
 
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${process.env.PORT}`);
