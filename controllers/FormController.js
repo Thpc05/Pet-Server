@@ -96,11 +96,11 @@ export const postForm = async (req, res) => {
 export const getFormById = async (req, res) => {
   try {
     const cpf = req.params.cpf;
-    console.log(`Buscando dados para o CPF: ${cpf}`);
-
+  
     if (!cpf) {
       return res.status(400).json({ message: 'Faltou Cpf' });
     }
+    console.log(`Buscando dados para o CPF: ${cpf}`);
 
     // Busca os 3 tipos de dados em paralelo
     const [paciente, familiaForms, profissionalForms] = await Promise.all([
