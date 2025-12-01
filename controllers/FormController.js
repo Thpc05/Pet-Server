@@ -109,11 +109,6 @@ export const getFormById = async (req, res) => {
       ProfissionalModel.find({ cpf: cpf }).sort({ createdAt: -1 }) // .find() retorna array (Muitos)
     ]);
 
-    // Se o PACIENTE (principal) não for encontrado, retorna 404
-    if (!paciente) {
-      return res.status(404).json({ message: "Paciente não encontrado." });
-    }
-
     // Deu Bom - Retorna o objeto composto que o Flutter espera
     res.status(200).json({
       paciente: paciente,
