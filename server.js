@@ -5,7 +5,8 @@ import cors from 'cors';
 
 import { connectDB } from './config/MongoDB.js';
 
-import FormsRoutes from './routes/FormRoutes.js'; 
+import FormsRoutes from './routes/FormRoutes.js';
+import UserRoutes from './routes/UserRoutes.js';
 
 dotenv.config();
 const app = express();
@@ -14,12 +15,11 @@ app.use(cors());
 
   // Usar as rotas
 app.use('/db/forms', FormsRoutes);
+app.use('/db/user', UserRoutes)
 
 connectDB();
 
 const PORT = process.env.PORT || 3050;
-
-
 
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
