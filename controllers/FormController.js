@@ -1,6 +1,7 @@
 import { PacienteModel, FamiliaModel, ProfissionalModel } from '../models/FormModel.js';
 import { spawn } from 'child_process';
 import path from 'path';
+import fs from 'fs'; // Importação necessária para manipular o arquivo após o download
 
 // --- FUNÇÃO AUXILIAR (Mantida, mas usada apenas internamente) ---
 const gerarPdfInterno = (dados) => {
@@ -9,7 +10,9 @@ const gerarPdfInterno = (dados) => {
         const scriptPath = path.resolve('python', 'geradorPDF.py');
         
         console.log("--- Iniciando processo Python ---");
-        const pythonProcess = spawn('python3', [scriptPath]); // Tente 'python' se 'python3' falhar no Docker
+        // Tente 'python' se 'python3' falhar no Docker.
+        // Se a imagem for python:3.9-slim, geralmente 'python' funciona.
+        const pythonProcess = spawn('python3', [scriptPath]); 
 
         let resultado = '';
         let erro = '';
@@ -54,26 +57,61 @@ const gerarPdfInterno = (dados) => {
     });
 };
 
-// --- CONTROLLER ---
+// --- CONTROLLERS ---
 
 export const postForm = async (req, res) => {
-  // ... (seu código de postForm continua idêntico ao que você já tinha)
   try {
     const { formType, ...formData } = req.body;
-    // ... validações ...
-    
-    // ... Switch case para salvar ...
+    console.log(`Recebido post para o tipo: ${formType}`);
 
-    // (Vou omitir o corpo do postForm aqui para focar na mudança do GET, 
-    // mas mantenha o seu código de postForm como estava)
-    
-     res.status(201).json({ message: `Salvo com sucesso`, data: savedForm });
+    if (!formType) {
+      return res.status(400).json({ message: 'O campo "formType" é obrigatório.' });
+    }
+
+    if (!formData.cpf) {
+      return res.status(400).json({ message: 'Faltou Cpf' });
+    }
+
+    let savedForm;
+
+    switch (formType) {
+      case 'paciente':
+        if (!formData.nome) return res.status(400).json({ message: 'Faltou Nome' });
+        
+        savedForm = await PacienteModel.findOneAndUpdate(
+          { cpf: formData.cpf },
+          { $set: formData },
+          { new: true, upsert: true, runValidators: true }
+        );
+        break;
+
+      case 'familia':
+        if (!formData.grau_parentesco) return res.status(400).json({ message: 'Faltou Parentesco' });
+        savedForm = await FamiliaModel.create(formData);
+        break;
+
+      case 'profissional':
+        if (!formData.id_profissional) return res.status(400).json({ message: 'Faltou ID Profissional' });
+        savedForm = await ProfissionalModel.create(formData);
+        break;
+
+      default:
+        return res.status(400).json({ message: 'formType inválido.' });
+    }
+
+    res.status(201).json({
+      message: `Formulário (${formType}) salvo com sucesso.`,
+      data: savedForm
+    });
 
   } catch (error) {
-     res.status(500).json({ message: "Erro" });
+    console.error(`Erro no postForm:`, error);
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ message: "Erro de validação", errors: error.errors });
+    }
+    res.status(500).json({ message: "Erro do servidor" });
   }
 };
-
 
 /**
  * getFormById
@@ -141,4 +179,68 @@ export const getFormById = async (req, res) => {
     console.error("Erro no getFormById:", error);
     res.status(500).json({ message: "Erro do servidor ao pegar os formulários" });
   }
+};
+
+/**
+ * downloadPdf
+ * Novo método para fazer o download (streaming) do PDF para o cliente.
+ * Endpoint sugerido: GET /api/form/download/:cpf
+ */
+export const downloadPdf = async (req, res) => {
+    const cpf = req.params.cpf;
+
+    if (!cpf) {
+        return res.status(400).json({ message: 'CPF é obrigatório para download.' });
+    }
+
+    try {
+        // 1. Busca os dados (mesma lógica do getFormById)
+        const [paciente, familiaForms, profissionalForms] = await Promise.all([
+            PacienteModel.findOne({ cpf: cpf }).lean(),
+            FamiliaModel.find({ cpf: cpf }).sort({ createdAt: -1 }).lean(),
+            ProfissionalModel.find({ cpf: cpf }).sort({ createdAt: -1 }).lean()
+        ]);
+
+        if (!paciente) {
+            return res.status(404).json({ message: 'Paciente não encontrado.' });
+        }
+
+        // 2. Monta os dados para o Python
+        const dadosCompletos = {
+            ...paciente,
+            familia: familiaForms,
+            profissional: profissionalForms
+        };
+
+        // 3. Chama o Python para gerar o PDF e espera o caminho
+        const caminhoPdf = await gerarPdfInterno(dadosCompletos);
+        
+        if (!caminhoPdf) {
+             return res.status(500).json({ message: 'Falha ao gerar o arquivo PDF no servidor.' });
+        }
+
+        // 4. Faz o streaming do arquivo de volta para o cliente
+        // Limpa o nome para evitar caracteres inválidos no header
+        const nomeLimpo = paciente.nome ? paciente.nome.replace(/\s/g, '_') : 'Relatorio';
+        const nomeArquivo = `${nomeLimpo}_${cpf}.pdf`;
+        
+        res.download(caminhoPdf, nomeArquivo, (err) => {
+            if (err) {
+                console.error("Erro no streaming do download:", err);
+                // Se der erro no envio, pode ser que a conexão já tenha fechado
+            }
+            
+            // Opcional: Deletar o arquivo do disco temporário do Render após o envio para economizar espaço
+            try {
+                fs.unlinkSync(caminhoPdf); 
+                console.log(`Arquivo temporário deletado após download: ${caminhoPdf}`);
+            } catch (unlinkErr) {
+                console.warn(`Não foi possível deletar o arquivo temporário: ${unlinkErr}`);
+            }
+        });
+
+    } catch (error) {
+        console.error("Erro geral no downloadPdf:", error);
+        res.status(500).json({ message: "Erro do servidor ao processar o download." });
+    }
 };
