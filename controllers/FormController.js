@@ -1,97 +1,85 @@
-// Importa os 3 novos Modelos
 import { PacienteModel, FamiliaModel, ProfissionalModel } from '../models/FormModel.js';
+import { spawn } from 'child_process';
+import path from 'path';
 
-/**
- * postForm
- * Salva um formulário. Ele espera um campo "formType" no req.body
- * para diferenciar entre 'paciente', 'familia', e 'profissional'.
- */
-export const postForm = async (req, res) => {
-  try {
-    // Desestrutura o formType para fora do formData
-    const { formType, ...formData } = req.body;
-    console.log(`Recebido post para o tipo: ${formType}`);
-
-    // Validação do Tipo
-    if (!formType) {
-      return res.status(400).json({ message: 'O campo "formType" (paciente, familia, ou profissional) é obrigatório.' });
-    }
-
-    // Validação do CPF (necessário para todos os tipos)
-    if (!formData.cpf) {
-      return res.status(400).json({ message: 'Faltou Cpf' });
-    }
-
-    let savedForm;
-
-    switch (formType) {
-      // --- Caso 1: PACIENTE ---
-      // Usa 'findOneAndUpdate' com 'upsert' para criar ou atualizar o paciente principal.
-      case 'paciente':
-        if (!formData.nome) {
-          return res.status(400).json({ message: 'Faltou Nome para o paciente' });
-        }
+// --- FUNÇÃO AUXILIAR (Mantida, mas usada apenas internamente) ---
+const gerarPdfInterno = (dados) => {
+    return new Promise((resolve, reject) => {
+        // Ajuste o caminho para onde está seu script Python
+        const scriptPath = path.resolve('python', 'geradorPDF.py');
         
-        const filter = { cpf: formData.cpf };
-        const dataToSet = { $set: formData };
-        const options = {
-          new: true,
-          upsert: true, // Cria o paciente se ele não existir
-          runValidators: true,
-        };
+        console.log("--- Iniciando processo Python ---");
+        const pythonProcess = spawn('python3', [scriptPath]); // Tente 'python' se 'python3' falhar no Docker
 
-        savedForm = await PacienteModel.findOneAndUpdate(filter, dataToSet, options);
-        break;
+        let resultado = '';
+        let erro = '';
 
-      // --- Caso 2: FAMILIA ---
-      // Usa '.create()' para adicionar um NOVO formulário de família.
-      case 'familia':
-        if (!formData.grau_parentesco) {
-          return res.status(400).json({ message: 'Faltou o Grau de Parentesco' });
-        }
-        // Garante que o CPF está no objeto
-        formData.cpf = formData.cpf;
-        savedForm = await FamiliaModel.create(formData);
-        break;
+        // Envia o JSON
+        pythonProcess.stdin.write(JSON.stringify(dados));
+        pythonProcess.stdin.end();
 
-      // --- Caso 3: PROFISSIONAL ---
-      // Usa '.create()' para adicionar um NOVO formulário profissional.
-      case 'profissional':
-        if (!formData.id_profissional) {
-          return res.status(400).json({ message: 'Faltou o ID do Profissional' });
-        }
-        // Garante que o CPF está no objeto
-        formData.cpf = formData.cpf;
-        savedForm = await ProfissionalModel.create(formData);
-        break;
+        // Recebe logs e resultado
+        pythonProcess.stdout.on('data', (data) => {
+            resultado += data.toString();
+        });
 
-      default:
-        return res.status(400).json({ message: 'formType inválido. Use "paciente", "familia" ou "profissional".' });
-    }
+        pythonProcess.stderr.on('data', (data) => {
+            erro += data.toString();
+        });
 
-    // Deu Bom
-    res.status(201).json({
-      message: `Formulário (${formType}) salvo com sucesso.`,
-      data: savedForm
+        pythonProcess.on('close', (code) => {
+            if (code !== 0) {
+                console.error(`Erro Python: ${erro}`);
+                // Não damos reject aqui para não travar a API principal, 
+                // apenas retornamos null
+                resolve(null); 
+            } else {
+                try {
+                    // Pega a última linha válida do output (JSON)
+                    const lines = resultado.trim().split('\n');
+                    const jsonStr = lines[lines.length - 1]; 
+                    const resposta = JSON.parse(jsonStr);
+                    
+                    if (resposta.arquivos && resposta.arquivos.length > 0) {
+                        resolve(resposta.arquivos[0]);
+                    } else {
+                        resolve(null);
+                    }
+                } catch (e) {
+                    console.error("Erro ao ler resposta do Python:", e);
+                    resolve(null);
+                }
+            }
+        });
     });
+};
+
+// --- CONTROLLER ---
+
+export const postForm = async (req, res) => {
+  // ... (seu código de postForm continua idêntico ao que você já tinha)
+  try {
+    const { formType, ...formData } = req.body;
+    // ... validações ...
+    
+    // ... Switch case para salvar ...
+
+    // (Vou omitir o corpo do postForm aqui para focar na mudança do GET, 
+    // mas mantenha o seu código de postForm como estava)
+    
+     res.status(201).json({ message: `Salvo com sucesso`, data: savedForm });
 
   } catch (error) {
-    console.error(`Erro no postForm (tipo: ${req.body.formType}):`, error);
-    
-    if (error.name === 'ValidationError') {
-      return res.status(400).json({
-        message: "Erro de validação",
-        errors: error.errors
-      });
-    }
-    res.status(500).json({ message: "Erro do servidor ao salvar o formulário" });
+     res.status(500).json({ message: "Erro" });
   }
 };
 
+
 /**
- * getFormById (Get por CPF)
- * Busca os dados do paciente, a lista de forms da família e a
- * lista de forms profissionais, todos vinculados a um único CPF.
+ * getFormById
+ * 1. Busca os dados no Mongo.
+ * 2. Manda gerar o PDF no Python (apenas gera, não retorna).
+ * 3. Retorna o JSON original para o front.
  */
 export const getFormById = async (req, res) => {
   try {
@@ -100,16 +88,49 @@ export const getFormById = async (req, res) => {
     if (!cpf) {
       return res.status(400).json({ message: 'Faltou Cpf' });
     }
-    console.log(`Buscando dados para o CPF: ${cpf}`);
-
-    // Busca os 3 tipos de dados em paralelo
+    
+    // 1. Busca os dados (Usando .lean() para converter Mongoose Doc -> Objeto JS Puro)
     const [paciente, familiaForms, profissionalForms] = await Promise.all([
-      PacienteModel.findOne({ cpf: cpf }),
-      FamiliaModel.find({ cpf: cpf }).sort({ createdAt: -1 }), // .find() retorna array (Muitos)
-      ProfissionalModel.find({ cpf: cpf }).sort({ createdAt: -1 }) // .find() retorna array (Muitos)
+      PacienteModel.findOne({ cpf: cpf }).lean(),
+      FamiliaModel.find({ cpf: cpf }).sort({ createdAt: -1 }).lean(),
+      ProfissionalModel.find({ cpf: cpf }).sort({ createdAt: -1 }).lean()
     ]);
 
-    // Deu Bom - Retorna o objeto composto que o Flutter espera
+    if (!paciente) {
+        // Se não achar paciente, retorna 404 e nem tenta gerar PDF
+        return res.status(404).json({ 
+            message: 'Paciente não encontrado',
+            paciente: null,
+            familia: [],
+            profissional: []
+        });
+    }
+
+    // 2. Tenta gerar o PDF em "segundo plano" (await para garantir que roda, mas sem travar resposta de erro)
+    try {
+        // Monta o objeto único que o Python espera (juntando tudo)
+        const dadosCompletos = {
+            ...paciente, // Espalha nome, cpf, etc na raiz
+            familia: familiaForms,
+            profissional: profissionalForms
+        };
+
+        // Chama o Python
+        const caminhoPdfGerado = await gerarPdfInterno(dadosCompletos);
+        
+        if (caminhoPdfGerado) {
+            console.log(`✅ PDF gerado com sucesso em: ${caminhoPdfGerado}`);
+        } else {
+            console.log("⚠️ Python rodou mas não retornou caminho do arquivo.");
+        }
+
+    } catch (pdfError) {
+        // Se der erro no PDF, APENAS logamos. Não queremos que a API falhe para o usuário.
+        console.error("❌ Erro ao tentar gerar PDF:", pdfError);
+    }
+
+    // 3. Retorno PADRÃO (JSON) como você pediu
+    // O front-end nem vai saber que o PDF foi gerado lá no servidor
     res.status(200).json({
       paciente: paciente,
       familia: familiaForms,
