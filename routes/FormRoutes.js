@@ -11,6 +11,6 @@ FormsRoutes.post('/postForm', postForm);
 FormsRoutes.get('/getForm/:cpf', getFormById);
 
 // 2. Nova Rota para BAIXAR O ARQUIVO (PDF)
-FormsRoutes.get('/downloadPdf/:cpf', downloadPdf);
+FormsRoutes.get('/getPdf/:cpf', downloadPdf);
 
 export default FormsRoutes;
