@@ -13,9 +13,15 @@ const app = express();
 app.use(express.json());
 app.use(cors()); 
 
-  // Usar as rotas
+// Usar as rotas
 app.use('/db/forms', FormsRoutes);
 app.use('/db/user', UserRoutes)
+
+// Status
+app.get('/status', (req, res) => {
+  console.log('Req de status recebida')
+  res.send('ok');
+});
 
 connectDB();
 
