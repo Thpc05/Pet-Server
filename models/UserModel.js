@@ -1,5 +1,21 @@
 import mongoose from 'mongoose';
 
+// Schema para os itens individuais do histórico (Embutido)
+const HistoryItemSchema = new mongoose.Schema({
+    descricao: { 
+        type: String, 
+        required: true 
+    },
+    nome_paciente: { 
+        type: String, 
+        default: 'Desconhecido' 
+    },
+    timestamp: { 
+        type: Date, 
+        default: Date.now 
+    }
+});
+
 const NewUserSchema = new mongoose.Schema({
     name: {
         type: String,
@@ -25,10 +41,13 @@ const NewUserSchema = new mongoose.Schema({
     createdAt: {
         type: Date,
         default: Date.now
+    },
+    history: {
+        type: [HistoryItemSchema],
+        default: [] 
     }
 });
 
-// O segredo está aqui: export default
 const NewUserModel = mongoose.model('NewUser', NewUserSchema);
 
 export default NewUserModel;

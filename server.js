@@ -7,7 +7,6 @@ import { connectDB } from './config/MongoDB.js';
 
 import FormsRoutes from './routes/FormRoutes.js';
 import UserRoutes from './routes/UserRoutes.js';
-import HistoryRouter from './routes/HistoryRoutes.js';
 
 dotenv.config();
 const app = express();
@@ -17,7 +16,6 @@ app.use(cors());
 // Usar as rotas
 app.use('/forms', FormsRoutes);
 app.use('/user', UserRoutes)
-app.use('/historico', HistoryRouter);
 
 // Status
 app.get('/status', (req, res) => {

@@ -1,5 +1,4 @@
 import NewUserModel from '../models/UserModel.js';
-import HistoryModel from '../models/HistoryModel.js';
 
 // 1. Cadastrar (Register)
 export const postNewUser = async (req, res) => {
@@ -17,6 +16,7 @@ export const postNewUser = async (req, res) => {
             crm,
             email,
             password 
+            // history inicia vazio [] automaticamente pelo Model
         });
 
         return res.status(201).json({
@@ -54,13 +54,55 @@ export const loginUser = async (req, res) => {
     }
 }
 
-// 3. Buscar Todos (NOVO - Dashboard)
+// 3. Buscar Todos (Para o Dashboard)
 export const getAllUsers = async (req, res) => {
     try {
-        // Busca todos os usuários, ocultando o campo password
+        // Busca todos os usuários, ocultando a senha. 
+        // O array 'history' virá embutido no retorno.
         const users = await NewUserModel.find({}, '-password').sort({ createdAt: -1 });
         return res.status(200).json(users);
     } catch (error) {
         return res.status(500).json({ error: 'Erro ao buscar profissionais: ' + error.message });
+    }
+}
+
+export const addUserHistory = async (req, res) => {
+    try {
+        const { id_profissional, descricao, nome_paciente, timestamp } = req.body;
+
+        const user = await NewUserModel.findOne({ crm: id_profissional });
+
+        if (!user) {
+            return res.status(404).json({ error: 'Profissional não encontrado.' });
+        }
+
+        user.history.push({
+            descricao,
+            nome_paciente,
+            timestamp: timestamp || new Date()
+        });
+
+        await user.save();
+
+        return res.status(201).json({ message: 'Histórico atualizado.' });
+
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Erro ao salvar histórico: ' + error.message });
+    }
+}
+
+export const getUserHistory = async (req, res) => {
+    try {
+        const { crm } = req.params;
+        const user = await NewUserModel.findOne({ crm }, 'history');
+        
+        if (!user) return res.status(404).json({ error: 'Profissional não encontrado.' });
+
+        const sortedHistory = user.history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        return res.status(200).json(sortedHistory);
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
     }
 }
