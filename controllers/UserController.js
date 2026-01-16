@@ -1,11 +1,11 @@
 import NewUserModel from '../models/UserModel.js';
+import HistoryModel from '../models/HistoryModel.js';
 
 // 1. Cadastrar (Register)
 export const postNewUser = async (req, res) => {
     try {
         const { name, crm, email, password } = req.body;
 
-        // Verifica duplicidade
         const userExists = await NewUserModel.findOne({ $or: [{ crm }, { email }] });
 
         if (userExists) {
@@ -25,7 +25,6 @@ export const postNewUser = async (req, res) => {
         });
 
     } catch (error) {
-        // console.log(error) // Dica: use isso para ver o erro real no terminal se der pau de novo
         return res.status(500).json({ error: 'Erro ao criar usuário: ' + error.message });
     }
 }
@@ -35,7 +34,6 @@ export const loginUser = async (req, res) => {
     try {
         const { crm, password } = req.body;
 
-        // CORREÇÃO AQUI: Usar NewUserModel, não NewUser
         const user = await NewUserModel.findOne({ crm });
 
         if (!user) {
@@ -53,5 +51,16 @@ export const loginUser = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({ error: 'Erro no servidor: ' + error.message });
+    }
+}
+
+// 3. Buscar Todos (NOVO - Dashboard)
+export const getAllUsers = async (req, res) => {
+    try {
+        // Busca todos os usuários, ocultando o campo password
+        const users = await NewUserModel.find({}, '-password').sort({ createdAt: -1 });
+        return res.status(200).json(users);
+    } catch (error) {
+        return res.status(500).json({ error: 'Erro ao buscar profissionais: ' + error.message });
     }
 }
