@@ -66,9 +66,11 @@ export const getAllUsers = async (req, res) => {
     }
 }
 
+// 4. Adicionar Histórico (ATUALIZADO COM CPF)
 export const addUserHistory = async (req, res) => {
     try {
-        const { id_profissional, descricao, nome_paciente, timestamp } = req.body;
+        // Agora extraímos também o cpf_paciente
+        const { id_profissional, descricao, nome_paciente, cpf_paciente, timestamp } = req.body;
 
         const user = await NewUserModel.findOne({ crm: id_profissional });
 
@@ -76,9 +78,11 @@ export const addUserHistory = async (req, res) => {
             return res.status(404).json({ error: 'Profissional não encontrado.' });
         }
 
+        // Adiciona ao array com o CPF
         user.history.push({
             descricao,
             nome_paciente,
+            cpf_paciente, // Salva o CPF no banco
             timestamp: timestamp || new Date()
         });
 

@@ -8,6 +8,12 @@ const pacienteSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  data_nascimento: {
+    type: Date
+  },
+  nome_da_mae: {
+    type: String
+  },
   cpf: {
     type: String,
     unique: true, // Correto! Só pode haver UM paciente por CPF.
